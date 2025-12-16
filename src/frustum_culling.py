@@ -41,8 +41,8 @@ def create_occlusion_buffer(stage, camera_prim, resolution, selected_prims, far_
     # Create an occlusion buffer
     occlusion_buffer = np.full(resolution, far_clip, dtype=np.float32)
 
-    # Initialize counter for culled prims
-    culled_prims_count = 0
+    # Initialize counter for processed pixels
+    processed_pixels_count = 0
 
     # Iterate through all pixels
     for y in range(resolution[1]):
@@ -50,22 +50,22 @@ def create_occlusion_buffer(stage, camera_prim, resolution, selected_prims, far_
             # Calculate ray direction
             ndc_x = (x / resolution[0] - 0.5) * 2
             ndc_y = (y / resolution[1] - 0.5) * 2
-            
+
             ray_dir = Gf.Vec3d(
                 np.tan(fov_horizontal / 2) * ndc_x,
                 np.tan(fov_vertical / 2) * ndc_y,
                 -1
             ).GetNormalized()
-            
+
             # Transform ray direction to world space
             world_ray_dir = camera_transform.TransformDir(ray_dir)
-            
+
             # Create a ray
             ray = Gf.Ray(camera_position, world_ray_dir)
-            
+
             # Intersect with selected prims
             hit_distance = far_clip
-            
+
             for prim_path in selected_prims:
                 prim = stage.GetPrimAtPath(prim_path)
                 if prim.IsValid() and prim.IsA(UsdGeom.Boundable):
@@ -73,11 +73,13 @@ def create_occlusion_buffer(stage, camera_prim, resolution, selected_prims, far_
                     intersects, distance = ray_box_intersection(ray, bbox)
                     if intersects and distance < hit_distance:
                         hit_distance = distance
-                        culled_prims_count += 1
-                        if max_occl_culled_prims is not None and culled_prims_count >= max_occl_culled_prims:
-                            return occlusion_buffer
-            
+
             occlusion_buffer[y, x] = hit_distance
+
+            # Increment pixel counter and check for early exit
+            processed_pixels_count += 1
+            if max_occl_culled_prims is not None and processed_pixels_count >= max_occl_culled_prims:
+                return occlusion_buffer
 
     return occlusion_buffer
 
